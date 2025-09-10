@@ -62,10 +62,6 @@ class BedrockStack(Stack):
             )
         )
 
-        # Note: Bedrock foundation models are not created via CDK
-        # They are pre-existing AWS services that we can invoke
-        # This stack sets up the necessary IAM permissions and KMS keys
-        
-        # Create custom resource to enable Bedrock models (if needed)
-        # This would typically be done through AWS Console or CLI
-        # as CDK doesn't have direct support for enabling Bedrock models
+        # Note: Inference profiles need to be created via AWS Console or CLI
+        # as CDK doesn't have direct support for creating inference profiles
+        # For now, we'll use the direct model ID approach with proper error handling

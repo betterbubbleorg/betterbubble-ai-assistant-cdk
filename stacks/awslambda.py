@@ -83,6 +83,21 @@ class LambdaStack(Stack):
             )
         )
 
+        # Add KMS permissions for DynamoDB encryption
+        if stacks and 'dynamodb' in stacks:
+            dynamodb_stack = stacks['dynamodb']
+            if hasattr(dynamodb_stack, 'encryption_key'):
+                self.lambda_role.add_to_policy(
+                    iam.PolicyStatement(
+                        effect=iam.Effect.ALLOW,
+                        actions=[
+                            "kms:Decrypt",
+                            "kms:GenerateDataKey"
+                        ],
+                        resources=[dynamodb_stack.encryption_key.key_arn]
+                    )
+                )
+
         # Task Manager Lambda Function
         self.task_manager_lambda = lambda_.Function(
             self, "TaskManagerLambda",
@@ -103,6 +118,15 @@ class LambdaStack(Stack):
             }
         )
 
+        # Create Lambda layer for dependencies
+        self.dependencies_layer = lambda_.LayerVersion(
+            self, "DependenciesLayer",
+            layer_version_name=config.generate_stack_name("dependencies-layer"),
+            code=lambda_.Code.from_asset("lambda_layers"),
+            compatible_runtimes=[lambda_.Runtime.PYTHON_3_11],
+            description="Dependencies for AI Assistant Lambda functions"
+        )
+
         # AI Assistant Lambda Function
         self.ai_assistant_lambda = lambda_.Function(
             self, "AiAssistantLambda",
@@ -113,6 +137,7 @@ class LambdaStack(Stack):
             role=self.lambda_role,
             timeout=Duration.seconds(30),
             memory_size=512,
+            layers=[self.dependencies_layer],
             log_group=logs.LogGroup(
                 self, "AiAssistantLogGroup",
                 log_group_name=f"/aws/lambda/{config.generate_stack_name('ai-assistant')}",
@@ -120,7 +145,8 @@ class LambdaStack(Stack):
             ),
             environment={
                 'CONVERSATIONS_TABLE_NAME': stacks['dynamodb'].conversations_table.table_name if stacks and 'dynamodb' in stacks else '',
-                'COGNITO_USER_POOL_ID': stacks['cognito'].user_pool.user_pool_id if stacks and 'cognito' in stacks else ''
+                'COGNITO_USER_POOL_ID': stacks['cognito'].user_pool.user_pool_id if stacks and 'cognito' in stacks else '',
+                'COGNITO_USER_POOL_CLIENT_ID': stacks['cognito'].user_pool_client.user_pool_client_id if stacks and 'cognito' in stacks else ''
             }
         )
 
