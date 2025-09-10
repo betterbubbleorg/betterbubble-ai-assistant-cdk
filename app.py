@@ -30,9 +30,6 @@ config, cdk_env = Config.create(conf_path)
 # Create global environment (us-east-1) for services that require it
 global_cdk_env = config.environment(region='us-east-1')
 
-# Note: Route53 zones are global but we'll create them in the same region as frontend for now
-# to avoid cross-region reference issues
-
 # Create stacks dictionary to hold all stage stacks
 stacks = {}
 

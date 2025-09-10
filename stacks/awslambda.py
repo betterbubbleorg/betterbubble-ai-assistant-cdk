@@ -86,235 +86,40 @@ class LambdaStack(Stack):
         # Task Manager Lambda Function
         self.task_manager_lambda = lambda_.Function(
             self, "TaskManagerLambda",
-            function_name="betterbubble-ai-task-manager",
+            function_name=config.generate_stack_name("task-manager"),
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="task_manager.handler",
-            code=lambda_.Code.from_inline("""
-import json
-import boto3
-import os
-from datetime import datetime
-
-def handler(event, context):
-    # Basic task management logic
-    return {
-        'statusCode': 200,
-        'body': json.dumps({
-            'message': 'Task manager function is working',
-            'timestamp': datetime.utcnow().isoformat()
-        })
-    }
-            """),
+            handler="lambda_function.handler",
+            code=lambda_.Code.from_asset("lambda_functions/task_manager"),
             role=self.lambda_role,
             timeout=Duration.seconds(30),
             memory_size=256,
             log_group=logs.LogGroup(
                 self, "TaskManagerLogGroup",
-                log_group_name="/aws/lambda/betterbubble-ai-task-manager",
+                log_group_name=f"/aws/lambda/{config.generate_stack_name('task-manager')}",
                 retention=logs.RetentionDays.ONE_WEEK
-            )
+            ),
+            environment={
+                'TASKS_TABLE_NAME': stacks['dynamodb'].tasks_table.table_name if stacks and 'dynamodb' in stacks else ''
+            }
         )
 
         # AI Assistant Lambda Function
         self.ai_assistant_lambda = lambda_.Function(
             self, "AiAssistantLambda",
-            function_name="betterbubble-ai-assistant",
+            function_name=config.generate_stack_name("ai-assistant"),
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="ai_assistant.handler",
-            code=lambda_.Code.from_inline("""
-import json
-import boto3
-import os
-import jwt
-import requests
-from datetime import datetime
-from urllib.parse import urlparse
-
-# Initialize clients
-bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
-cognito = boto3.client('cognito-idp')
-
-def get_cognito_public_keys(user_pool_id, region):
-    \"\"\"Get Cognito public keys for JWT verification\"\"\"
-    jwks_url = f'https://cognito-idp.{region}.amazonaws.com/{user_pool_id}/.well-known/jwks.json'
-    response = requests.get(jwks_url)
-    return response.json()
-
-def verify_cognito_token(token, user_pool_id, region):
-    \"\"\"Verify Cognito JWT token\"\"\"
-    try:
-        # Get public keys
-        jwks = get_cognito_public_keys(user_pool_id, region)
-        
-        # Decode token header to get key ID
-        unverified_header = jwt.get_unverified_header(token)
-        key_id = unverified_header.get('kid')
-        
-        # Find the matching key
-        public_key = None
-        for key in jwks['keys']:
-            if key['kid'] == key_id:
-                public_key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(key))
-                break
-        
-        if not public_key:
-            return None
-        
-        # Verify and decode token
-        decoded_token = jwt.decode(
-            token,
-            public_key,
-            algorithms=['RS256'],
-            audience=user_pool_id,
-            issuer=f'https://cognito-idp.{region}.amazonaws.com/{user_pool_id}'
-        )
-        
-        return decoded_token
-    except Exception as e:
-        print(f"Token verification error: {str(e)}")
-        return None
-
-def handler(event, context):
-    try:
-        # Handle CORS preflight
-        if event.get('httpMethod') == 'OPTIONS':
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                },
-                'body': ''
-            }
-        
-        # Get authorization header
-        auth_header = event.get('headers', {}).get('Authorization', '')
-        if not auth_header.startswith('Bearer '):
-            return {
-                'statusCode': 401,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                },
-                'body': json.dumps({'error': 'Authorization header required'})
-            }
-        
-        # Extract token
-        token = auth_header.split(' ')[1]
-        
-        # Verify token (you'll need to set these environment variables)
-        user_pool_id = os.environ.get('COGNITO_USER_POOL_ID')
-        region = context.invoked_function_arn.split(':')[3]  # Get region from function ARN
-        
-        if not user_pool_id:
-            return {
-                'statusCode': 500,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                },
-                'body': json.dumps({'error': 'Configuration error'})
-            }
-        
-        # Verify the token
-        decoded_token = verify_cognito_token(token, user_pool_id, region)
-        if not decoded_token:
-            return {
-                'statusCode': 401,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                },
-                'body': json.dumps({'error': 'Invalid token'})
-            }
-        
-        # Parse the request
-        body = json.loads(event.get('body', '{}'))
-        user_message = body.get('message', '')
-        
-        if not user_message:
-            return {
-                'statusCode': 400,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-                    'Access-Control-Allow-Methods': 'POST, OPTIONS'
-                },
-                'body': json.dumps({'error': 'No message provided'})
-            }
-        
-        # Get user info from token
-        user_id = decoded_token.get('sub', 'unknown')
-        username = decoded_token.get('cognito:username', 'unknown')
-        
-        # Prepare the prompt for Claude
-        prompt = f"Human: {user_message}\n\nAssistant:"
-        
-        # Invoke Claude model
-        response = bedrock.invoke_model(
-            modelId='anthropic.claude-3-sonnet-20240229-v1:0',
-            body=json.dumps({
-                'prompt': prompt,
-                'max_tokens_to_sample': 1000,
-                'temperature': 0.7,
-                'top_p': 0.9
-            }),
-            contentType='application/json'
-        )
-        
-        # Parse the response
-        response_body = json.loads(response['body'].read())
-        ai_response = response_body.get('completion', 'Sorry, I could not process your request.')
-        
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            },
-            'body': json.dumps({
-                'response': ai_response,
-                'user_id': user_id,
-                'username': username,
-                'timestamp': datetime.utcnow().isoformat()
-            })
-        }
-        
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS'
-            },
-            'body': json.dumps({
-                'error': 'Internal server error',
-                'message': str(e)
-            })
-        }
-            """),
+            handler="lambda_function.handler",
+            code=lambda_.Code.from_asset("lambda_functions/ai_assistant"),
             role=self.lambda_role,
             timeout=Duration.seconds(30),
             memory_size=512,
             log_group=logs.LogGroup(
                 self, "AiAssistantLogGroup",
-                log_group_name="/aws/lambda/betterbubble-ai-assistant",
+                log_group_name=f"/aws/lambda/{config.generate_stack_name('ai-assistant')}",
                 retention=logs.RetentionDays.ONE_WEEK
             ),
             environment={
+                'CONVERSATIONS_TABLE_NAME': stacks['dynamodb'].conversations_table.table_name if stacks and 'dynamodb' in stacks else '',
                 'COGNITO_USER_POOL_ID': stacks['cognito'].user_pool.user_pool_id if stacks and 'cognito' in stacks else ''
             }
         )
@@ -322,33 +127,21 @@ def handler(event, context):
         # Note Processor Lambda Function
         self.note_processor_lambda = lambda_.Function(
             self, "NoteProcessorLambda",
-            function_name="betterbubble-ai-note-processor",
+            function_name=config.generate_stack_name("note-processor"),
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="note_processor.handler",
-            code=lambda_.Code.from_inline("""
-import json
-import boto3
-import os
-from datetime import datetime
-
-def handler(event, context):
-    # Basic note processing logic
-    return {
-        'statusCode': 200,
-        'body': json.dumps({
-            'message': 'Note processor function is working',
-            'timestamp': datetime.utcnow().isoformat()
-        })
-    }
-            """),
+            handler="lambda_function.handler",
+            code=lambda_.Code.from_asset("lambda_functions/note_processor"),
             role=self.lambda_role,
             timeout=Duration.seconds(30),
             memory_size=256,
             log_group=logs.LogGroup(
                 self, "NoteProcessorLogGroup",
-                log_group_name="/aws/lambda/betterbubble-ai-note-processor",
+                log_group_name=f"/aws/lambda/{config.generate_stack_name('note-processor')}",
                 retention=logs.RetentionDays.ONE_WEEK
-            )
+            ),
+            environment={
+                'NOTES_TABLE_NAME': stacks['dynamodb'].notes_table.table_name if stacks and 'dynamodb' in stacks else ''
+            }
         )
 
         # Create API Gateway

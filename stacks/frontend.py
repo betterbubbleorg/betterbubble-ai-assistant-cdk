@@ -9,10 +9,9 @@ from aws_cdk import (
     aws_s3_deployment as s3_deployment,
     aws_cloudfront as cloudfront,
     aws_cloudfront_origins as origins,
-    aws_route53 as route53,
-    aws_route53_targets as route53_targets,
     aws_certificatemanager as acm,
-    RemovalPolicy
+    RemovalPolicy,
+    CfnOutput
 )
 from constructs import Construct
 from typing import Optional
@@ -50,7 +49,7 @@ class FrontendStack(Stack):
         # Create S3 bucket for hosting
         self.hosting_bucket = s3.Bucket(
             self, "ChatbotHostingBucket",
-            bucket_name=f"betterbubble-chatbot-{self.account}-{self.region}",
+            bucket_name=f"{config.generate_stack_name('chatbot')}-{self.account}-{self.region}",
             website_index_document="index.html",
             website_error_document="error.html",
             public_read_access=True,
@@ -64,18 +63,10 @@ class FrontendStack(Stack):
             auto_delete_objects=True
         )
 
-        # Create hosted zone for betterbubble.org
-        self.hosted_zone = route53.HostedZone(
-            self, "BetterBubbleZone",
-            zone_name="betterbubble.org",
-            comment="Better Bubble AI Personal Assistant domain"
-        )
-
-        # Create SSL certificate for custom domain
-        self.certificate = acm.Certificate(
-            self, "ChatbotCertificate",
-            domain_name="chatbot.betterbubble.org",
-            validation=acm.CertificateValidation.from_dns(self.hosted_zone)
+        # Import validated certificate from us-east-1
+        self.certificate = acm.Certificate.from_certificate_arn(
+            self, "ImportedCertificate",
+            certificate_arn="arn:aws:acm:us-east-1:166199670697:certificate/7ca9242f-38c1-42d8-96aa-3409d79d7322"
         )
 
         # Create CloudFront distribution with custom domain
@@ -98,14 +89,23 @@ class FrontendStack(Stack):
             ]
         )
 
-        # Create Route53 record for custom domain
-        self.domain_record = route53.ARecord(
-            self, "ChatbotDomainRecord",
-            zone=self.hosted_zone,
-            record_name="chatbot",
-            target=route53.RecordTarget.from_alias(
-                route53_targets.CloudFrontTarget(self.distribution)
-            )
+        # Export CloudFront information
+        CfnOutput(
+            self, "CloudFrontDomainName",
+            value=self.distribution.distribution_domain_name,
+            description="CloudFront distribution domain name"
+        )
+        
+        CfnOutput(
+            self, "CustomDomainUrl",
+            value="https://chatbot.betterbubble.org",
+            description="Custom domain URL for the chatbot interface"
+        )
+        
+        CfnOutput(
+            self, "DNSInstructions",
+            value=f"Create CNAME record: chatbot.betterbubble.org -> {self.distribution.distribution_domain_name}",
+            description="DNS configuration instructions"
         )
 
         # Load and render Jinja2 template

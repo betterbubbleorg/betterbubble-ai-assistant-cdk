@@ -31,7 +31,7 @@ class DynamoDBStack(Stack):
         # Users table - stores user profiles and preferences
         self.users_table = dynamodb.Table(
             self, "UsersTable",
-            table_name="betterbubble-ai-users",
+            table_name=config.generate_stack_name("users"),
             partition_key=dynamodb.Attribute(
                 name="user_id",
                 type=dynamodb.AttributeType.STRING
@@ -53,7 +53,7 @@ class DynamoDBStack(Stack):
         # Tasks table - stores user tasks and todos
         self.tasks_table = dynamodb.Table(
             self, "TasksTable",
-            table_name="betterbubble-ai-tasks",
+            table_name=config.generate_stack_name("tasks"),
             partition_key=dynamodb.Attribute(
                 name="user_id",
                 type=dynamodb.AttributeType.STRING
@@ -75,7 +75,7 @@ class DynamoDBStack(Stack):
         # Appointments table - stores scheduled appointments
         self.appointments_table = dynamodb.Table(
             self, "AppointmentsTable",
-            table_name="betterbubble-ai-appointments",
+            table_name=config.generate_stack_name("appointments"),
             partition_key=dynamodb.Attribute(
                 name="user_id",
                 type=dynamodb.AttributeType.STRING
@@ -97,7 +97,7 @@ class DynamoDBStack(Stack):
         # Notes table - stores user notes and ideas
         self.notes_table = dynamodb.Table(
             self, "NotesTable",
-            table_name="betterbubble-ai-notes",
+            table_name=config.generate_stack_name("notes"),
             partition_key=dynamodb.Attribute(
                 name="user_id",
                 type=dynamodb.AttributeType.STRING
@@ -119,7 +119,7 @@ class DynamoDBStack(Stack):
         # AI Conversations table - stores chat history
         self.conversations_table = dynamodb.Table(
             self, "ConversationsTable",
-            table_name="betterbubble-ai-conversations",
+            table_name=config.generate_stack_name("conversations"),
             partition_key=dynamodb.Attribute(
                 name="user_id",
                 type=dynamodb.AttributeType.STRING

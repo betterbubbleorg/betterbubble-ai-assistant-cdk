@@ -7,9 +7,6 @@ from aws_cdk import (
     Stack,
     aws_cognito as cognito,
     aws_iam as iam,
-    aws_lambda as lambda_,
-    aws_logs as logs,
-    custom_resources as cr,
     Duration,
     RemovalPolicy
 )
@@ -25,7 +22,7 @@ class CognitoStack(Stack):
         # Create Cognito User Pool
         self.user_pool = cognito.UserPool(
             self, "UserPool",
-            user_pool_name="betterbubble-ai-users",
+            user_pool_name=config.generate_stack_name("users"),
             self_sign_up_enabled=True,
             sign_in_aliases=cognito.SignInAliases(
                 email=True,
@@ -65,7 +62,7 @@ class CognitoStack(Stack):
         self.user_pool_client = cognito.UserPoolClient(
             self, "UserPoolClient",
             user_pool=self.user_pool,
-            user_pool_client_name="betterbubble-ai-client",
+            user_pool_client_name=config.generate_stack_name("client"),
             generate_secret=False,  # For web/mobile apps
             auth_flows=cognito.AuthFlow(
                 user_password=True,
@@ -99,7 +96,7 @@ class CognitoStack(Stack):
         # Create Identity Pool for AWS credentials
         self.identity_pool = cognito.CfnIdentityPool(
             self, "IdentityPool",
-            identity_pool_name="betterbubble-ai-identity",
+            identity_pool_name=config.generate_stack_name("identity"),
             allow_unauthenticated_identities=False,
             cognito_identity_providers=[
                 cognito.CfnIdentityPool.CognitoIdentityProviderProperty(
@@ -273,94 +270,8 @@ class CognitoStack(Stack):
         # Attach AI assistant policy to authenticated role
         self.authenticated_role.attach_inline_policy(self.ai_assistant_policy)
 
-        # Create Lambda function to create Cognito users
-        self.user_creator_lambda = lambda_.Function(
-            self, "UserCreatorLambda",
-            function_name="betterbubble-user-creator",
-            runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="user_creator.handler",
-            code=lambda_.Code.from_inline("""
-import json
-import boto3
-import os
-
-def handler(event, context):
-    try:
-        cognito = boto3.client('cognito-idp')
-        user_pool_id = os.environ['USER_POOL_ID']
-        
-        # Create the user "renee"
-        try:
-            response = cognito.admin_create_user(
-                UserPoolId=user_pool_id,
-                Username='renee',
-                UserAttributes=[
-                    {'Name': 'email', 'Value': 'renee@betterbubble.org'},
-                    {'Name': 'given_name', 'Value': 'Renee'},
-                    {'Name': 'family_name', 'Value': 'User'},
-                    {'Name': 'email_verified', 'Value': 'true'}
-                ],
-                TemporaryPassword='TempPass123!',
-                MessageAction='SUPPRESS'  # Don't send welcome email
-            )
-            
-            # Set permanent password
-            cognito.admin_set_user_password(
-                UserPoolId=user_pool_id,
-                Username='renee',
-                Password='ReneePass123!',
-                Permanent=True
-            )
-            
-            print(f"Created user renee: {response['User']['Username']}")
-            return {
-                'statusCode': 200,
-                'body': json.dumps({'message': 'User renee created successfully'})
-            }
-            
-        except cognito.exceptions.UsernameExistsException:
-            print("User renee already exists")
-            return {
-                'statusCode': 200,
-                'body': json.dumps({'message': 'User renee already exists'})
-            }
-        except Exception as e:
-            print(f"Error creating user: {str(e)}")
-            return {
-                'statusCode': 500,
-                'body': json.dumps({'error': str(e)})
-            }
-            
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
-            """),
-            timeout=Duration.seconds(30),
-            log_group=logs.LogGroup(
-                self, "UserCreatorLogGroup",
-                log_group_name="/aws/lambda/betterbubble-user-creator",
-                retention=logs.RetentionDays.ONE_WEEK
-            ),
-            environment={
-                'USER_POOL_ID': self.user_pool.user_pool_id
-            }
-        )
-
-        # Add Cognito permissions to the user creator Lambda
-        self.user_creator_lambda.add_to_role_policy(
-            iam.PolicyStatement(
-                effect=iam.Effect.ALLOW,
-                actions=[
-                    "cognito-idp:AdminCreateUser",
-                    "cognito-idp:AdminSetUserPassword",
-                    "cognito-idp:AdminGetUser"
-                ],
-                resources=[self.user_pool.user_pool_arn]
-            )
-        )
+        # Note: Users should be created manually via AWS Console or CLI
+        # This ensures proper attribute handling and avoids conflicts with CDK
 
         # Note: Custom attributes would need to be added via AWS Console or CLI
         # as CDK doesn't have direct support for adding custom attributes to existing UserPools
