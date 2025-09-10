@@ -32,13 +32,25 @@ def verify_jwt_token(token, user_pool_id, region='us-west-2'):
             raise ValueError('Unable to find appropriate key')
         
         # Verify and decode the token
+        expected_audience = os.environ.get('COGNITO_USER_POOL_CLIENT_ID')
+        expected_issuer = f'https://cognito-idp.{region}.amazonaws.com/{user_pool_id}'
+        
+        # For Cognito access tokens, we need to verify client_id instead of aud
         payload = jwt.decode(
             token,
             key,
             algorithms=['RS256'],
-            audience=os.environ.get('COGNITO_USER_POOL_CLIENT_ID'),
-            issuer=f'https://cognito-idp.{region}.amazonaws.com/{user_pool_id}'
+            issuer=expected_issuer,
+            options={"verify_aud": False, "verify_iss": True}
         )
+        
+        # Verify the client_id matches our expected audience
+        if payload.get('client_id') != expected_audience:
+            raise ValueError(f"Invalid client_id: {payload.get('client_id')}")
+        
+        # Verify token use is 'access'
+        if payload.get('token_use') != 'access':
+            raise ValueError(f"Invalid token_use: {payload.get('token_use')}")
         
         return payload
     except Exception as e:
