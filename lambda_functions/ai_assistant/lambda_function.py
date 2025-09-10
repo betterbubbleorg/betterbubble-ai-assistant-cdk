@@ -24,7 +24,8 @@ def verify_jwt_token(token, user_pool_id, region='us-west-2'):
         key = None
         for jwk in jwks['keys']:
             if jwk['kid'] == kid:
-                key = jwt.algorithms.RSAAlgorithm.from_jwk(json.dumps(jwk))
+                from jwt.algorithms import RSAAlgorithm
+                key = RSAAlgorithm.from_jwk(json.dumps(jwk))
                 break
         
         if not key:

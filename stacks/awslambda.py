@@ -102,7 +102,7 @@ class LambdaStack(Stack):
         self.task_manager_lambda = lambda_.Function(
             self, "TaskManagerLambda",
             function_name=config.generate_stack_name("task-manager"),
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_13,
             handler="lambda_function.handler",
             code=lambda_.Code.from_asset("lambda_functions/task_manager"),
             role=self.lambda_role,
@@ -123,7 +123,7 @@ class LambdaStack(Stack):
             self, "DependenciesLayer",
             layer_version_name=config.generate_stack_name("dependencies-layer"),
             code=lambda_.Code.from_asset("lambda_layers"),
-            compatible_runtimes=[lambda_.Runtime.PYTHON_3_11],
+            compatible_runtimes=[lambda_.Runtime.PYTHON_3_13],
             description="Dependencies for AI Assistant Lambda functions"
         )
 
@@ -131,7 +131,7 @@ class LambdaStack(Stack):
         self.ai_assistant_lambda = lambda_.Function(
             self, "AiAssistantLambda",
             function_name=config.generate_stack_name("ai-assistant"),
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_13,
             handler="lambda_function.handler",
             code=lambda_.Code.from_asset("lambda_functions/ai_assistant"),
             role=self.lambda_role,
@@ -154,7 +154,7 @@ class LambdaStack(Stack):
         self.note_processor_lambda = lambda_.Function(
             self, "NoteProcessorLambda",
             function_name=config.generate_stack_name("note-processor"),
-            runtime=lambda_.Runtime.PYTHON_3_11,
+            runtime=lambda_.Runtime.PYTHON_3_13,
             handler="lambda_function.handler",
             code=lambda_.Code.from_asset("lambda_functions/note_processor"),
             role=self.lambda_role,
