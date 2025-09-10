@@ -1,0 +1,34 @@
+# Development Environment Configuration
+
+# DynamoDB Configuration
+dynamodb:
+  billing_mode: PAY_PER_REQUEST
+  point_in_time_recovery: false
+  deletion_protection: false
+
+# Lambda Configuration
+lambda:
+  memory_size: 256
+  timeout_seconds: 30
+  log_retention_days: 7
+
+# Cognito Configuration
+cognito:
+  password_min_length: 8
+  mfa_required: false
+  account_recovery: EMAIL_ONLY
+
+# Bedrock Configuration
+bedrock:
+  model_id: anthropic.claude-3-5-sonnet-20241022-v2:0
+  max_tokens: 4000
+
+# CloudWatch Configuration
+cloudwatch:
+  cost_threshold: 25.0
+  log_retention_days: 7
+
+# Frontend Configuration
+frontend:
+  domain: dev.betterbubble.org
+  ssl_certificate: false

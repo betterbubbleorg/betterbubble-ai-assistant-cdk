@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Better Bubble AI Assistant</title>
+    <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.0.1/dist/amazon-cognito-identity.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        .auth-container {
+            padding: 40px;
+            text-align: center;
+        }
+        .auth-form {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+        .form-group input:focus {
+            border-color: #667eea;
+        }
+        .auth-button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s;
+            margin-bottom: 10px;
+        }
+        .auth-button:hover {
+            transform: translateY(-2px);
+        }
+        .auth-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .auth-toggle {
+            background: none;
+            border: none;
+            color: #667eea;
+            cursor: pointer;
+            text-decoration: underline;
+            font-size: 14px;
+        }
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            display: none;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 15px;
+            max-width: 80%;
+        }
+        .user-message {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        .ai-message {
+            background: white;
+            border: 1px solid #e9ecef;
+            margin-right: auto;
+        }
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            display: none;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .input-group input:focus {
+            border-color: #667eea;
+        }
+        .input-group button {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .input-group button:hover {
+            transform: translateY(-2px);
+        }
+        .input-group button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            font-style: italic;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .user-info {
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: none;
+        }
+        .logout-button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            float: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Better Bubble AI</h1>
+            <p>Your privacy-focused personal assistant</p>
+        </div>
+        
+        <!-- Authentication Section -->
+        <div class="auth-container" id="authContainer">
+            <div class="auth-form">
+                <h2 id="authTitle">Sign In</h2>
+                <div id="authForm">
+                    <div class="form-group">
+                        <label for="username">Username or Email:</label>
+                        <input type="text" id="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password:</label>
+                        <input type="password" id="password" required>
+                    </div>
+                    <button class="auth-button" id="authButton" onclick="signIn()">Sign In</button>
+                    <button class="auth-toggle" id="authToggle" onclick="toggleAuth()">Don't have an account? Sign Up</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- User Info Section -->
+        <div class="user-info" id="userInfo">
+            <span id="userDisplayName">Welcome!</span>
+            <button class="logout-button" onclick="signOut()">Logout</button>
+        </div>
+
+        <!-- Chat Section -->
+        <div class="chat-container" id="chatContainer">
+            <div class="message ai-message">
+                <strong>AI Assistant:</strong> Hello! I'm your Better Bubble AI assistant. How can I help you today?
+            </div>
+        </div>
+        <div class="input-container" id="inputContainer">
+            <div class="loading" id="loading">AI is thinking...</div>
+            <div class="input-group">
+                <input type="text" id="messageInput" placeholder="Type your message here..." autocomplete="off">
+                <button id="sendButton" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Cognito configuration
+        const COGNITO_CONFIG = {
+            UserPoolId: '{{ cognito_user_pool_id }}',
+            ClientId: '{{ cognito_client_id }}',
+            IdentityPoolId: '{{ cognito_identity_pool_id }}'
+        };
+
+        const API_URL = '{{ api_url }}ai';
+        let currentUser = null;
+        let accessToken = null;
+
+        // Initialize Cognito
+        const userPool = new AmazonCognitoIdentity.CognitoUserPool(COGNITO_CONFIG);
+        const identityPool = new AmazonCognitoIdentity.CognitoIdentityPool(COGNITO_CONFIG);
+
+        // Check if user is already authenticated
+        function checkAuth() {
+            const cognitoUser = userPool.getCurrentUser();
+            if (cognitoUser) {
+                cognitoUser.getSession((err, session) => {
+                    if (err) {
+                        console.log('Session error:', err);
+                        showAuth();
+                    } else {
+                        currentUser = cognitoUser;
+                        accessToken = session.getAccessToken().getJwtToken();
+                        showChat();
+                    }
+                });
+            } else {
+                showAuth();
+            }
+        }
+
+        function showAuth() {
+            document.getElementById('authContainer').style.display = 'block';
+            document.getElementById('userInfo').style.display = 'none';
+            document.getElementById('chatContainer').style.display = 'none';
+            document.getElementById('inputContainer').style.display = 'none';
+        }
+
+        function showChat() {
+            document.getElementById('authContainer').style.display = 'none';
+            document.getElementById('userInfo').style.display = 'block';
+            document.getElementById('chatContainer').style.display = 'block';
+            document.getElementById('inputContainer').style.display = 'block';
+            
+            // Update user display
+            if (currentUser) {
+                currentUser.getUserAttributes((err, attributes) => {
+                    if (!err) {
+                        const email = attributes.find(attr => attr.getName() === 'email')?.getValue() || 'User';
+                        document.getElementById('userDisplayName').textContent = `Welcome, ${email}!`;
+                    }
+                });
+            }
+        }
+
+        function signIn() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                showError('Please fill in all fields');
+                return;
+            }
+
+            const authenticationData = {
+                Username: username,
+                Password: password
+            };
+
+            const authenticationDetails = new AmazonCognitoIdentity.AuthenticationDetails(authenticationData);
+            const userData = {
+                Username: username,
+                Pool: userPool
+            };
+
+            const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
+            
+            cognitoUser.authenticateUser(authenticationDetails, {
+                onSuccess: (result) => {
+                    currentUser = cognitoUser;
+                    accessToken = result.getAccessToken().getJwtToken();
+                    showChat();
+                },
+                onFailure: (err) => {
+                    showError('Sign in failed: ' + err.message);
+                }
+            });
+        }
+
+        function signUp() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                showError('Please fill in all fields');
+                return;
+            }
+
+            const attributeList = [
+                new AmazonCognitoIdentity.CognitoUserAttribute({ Name: 'email', Value: username })
+            ];
+
+            userPool.signUp(username, password, attributeList, null, (err, result) => {
+                if (err) {
+                    showError('Sign up failed: ' + err.message);
+                } else {
+                    showError('Please check your email for verification code');
+                }
+            });
+        }
+
+        function signOut() {
+            if (currentUser) {
+                currentUser.signOut();
+            }
+            currentUser = null;
+            accessToken = null;
+            showAuth();
+        }
+
+        function toggleAuth() {
+            const title = document.getElementById('authTitle');
+            const button = document.getElementById('authButton');
+            const toggle = document.getElementById('authToggle');
+            
+            if (title.textContent === 'Sign In') {
+                title.textContent = 'Sign Up';
+                button.textContent = 'Sign Up';
+                button.onclick = signUp;
+                toggle.textContent = 'Already have an account? Sign In';
+            } else {
+                title.textContent = 'Sign In';
+                button.textContent = 'Sign In';
+                button.onclick = signIn;
+                toggle.textContent = 'Don\'t have an account? Sign Up';
+            }
+        }
+
+        function addMessage(content, isUser = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
+            
+            if (isUser) {
+                messageDiv.innerHTML = `<strong>You:</strong> ${content}`;
+            } else {
+                messageDiv.innerHTML = `<strong>AI Assistant:</strong> ${content}`;
+            }
+            
+            document.getElementById('chatContainer').appendChild(messageDiv);
+            document.getElementById('chatContainer').scrollTop = document.getElementById('chatContainer').scrollHeight;
+        }
+
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            document.getElementById('authContainer').appendChild(errorDiv);
+            setTimeout(() => errorDiv.remove(), 5000);
+        }
+
+        async function sendMessage() {
+            const message = document.getElementById('messageInput').value.trim();
+            if (!message || !accessToken) return;
+
+            // Add user message to chat
+            addMessage(message, true);
+            document.getElementById('messageInput').value = '';
+            
+            // Show loading
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('sendButton').disabled = true;
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${accessToken}`
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addMessage(data.response);
+                } else {
+                    addMessage('Error: ' + (data.error || 'Something went wrong'), false);
+                }
+            } catch (error) {
+                addMessage('Failed to connect to AI assistant. Please try again.', false);
+                console.error('Error:', error);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('sendButton').disabled = false;
+                document.getElementById('messageInput').focus();
+            }
+        }
+
+        // Allow sending with Enter key
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Initialize app
+        checkAuth();
+    </script>
+</body>
+</html>

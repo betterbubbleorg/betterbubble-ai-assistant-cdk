@@ -1,0 +1,25 @@
+# Global environment configuration
+region: us-west-2  # Primary region for most resources
+account: "166199670697"
+
+# Global stack configurations that apply to all environments
+global:
+  project_name: "AI-Personal-Assistant"
+  stack_prefix: "aiassistant"  # Used for stack naming
+  organization: "BetterBubble"
+  cost_center: "NonProfit"
+  
+  # Default tags applied to all resources
+  tags:
+    Project: "AI-Personal-Assistant"
+    Organization: "BetterBubble"
+    CostCenter: "NonProfit"
+    Owner: "adamjoseph"
+
+# IMPORTANT: Global Region (us-east-1)
+# Certain AWS services MUST be deployed in us-east-1:
+# - Lambda@Edge functions
+# - WAF for CloudFront
+# - Some CloudFront features
+# - ACM certificates for CloudFront
+# This is automatically available as config['global_region'] in all stacks
