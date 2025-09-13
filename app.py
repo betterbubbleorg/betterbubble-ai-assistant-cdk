@@ -16,6 +16,7 @@ from stacks.dynamodb import DynamoDBStack
 from stacks.cognito import CognitoStack
 from stacks.awslambda import LambdaStack
 from stacks.frontend import FrontendStack
+from stacks.admin_frontend import AdminFrontendStack
 from stacks.bedrock import BedrockStack
 from stacks.cloudwatch import CloudWatchStack
 
@@ -52,19 +53,24 @@ for environment_name in config.stages:
         env=cdk_env, config=stage_config
     )
     
-    stage_stacks['bedrock'] = BedrockStack(
-        app, stage_config.generate_stack_name('bedrock'),
-        env=cdk_env, config=stage_config
-    )
-    
     # Create dependent stacks (with stacks reference)
     stage_stacks['lambda'] = LambdaStack(
         app, stage_config.generate_stack_name('lambda'),
         env=cdk_env, config=stage_config, stacks=stage_stacks
     )
     
+    stage_stacks['bedrock'] = BedrockStack(
+        app, stage_config.generate_stack_name('bedrock'),
+        env=cdk_env, config=stage_config, stacks=stage_stacks
+    )
+    
     stage_stacks['frontend'] = FrontendStack(
         app, stage_config.generate_stack_name('frontend'),
+        env=cdk_env, config=stage_config, stacks=stage_stacks
+    )
+    
+    stage_stacks['admin_frontend'] = AdminFrontendStack(
+        app, stage_config.generate_stack_name('admin-frontend'),
         env=cdk_env, config=stage_config, stacks=stage_stacks
     )
     

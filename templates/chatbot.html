@@ -190,6 +190,153 @@
             cursor: pointer;
             float: right;
         }
+        .countdown-widget {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+            color: white;
+            padding: 15px 20px;
+            margin: 10px 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+        }
+        .countdown-widget h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+        .countdown-timer {
+            font-size: 1.5em;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            margin: 5px 0;
+        }
+        .countdown-description {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin: 5px 0;
+        }
+        .countdown-close {
+            position: absolute;
+            top: 5px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.2em;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+        .countdown-close:hover {
+            opacity: 1;
+        }
+        .input-group input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .typing-indicator {
+            display: none;
+            color: #667eea;
+            font-style: italic;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .topic-selector {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            display: none;
+        }
+        .topic-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .topic-tab {
+            padding: 8px 16px;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .topic-tab.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .topic-tab:hover:not(.active) {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        .topic-tab .close-btn {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            display: none;
+        }
+        .topic-tab:hover .close-btn {
+            display: block;
+        }
+        .add-topic-btn {
+            padding: 8px 16px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .add-topic-btn:hover {
+            background: #218838;
+            transform: translateY(-1px);
+        }
+        .topic-input {
+            display: none;
+            margin-top: 10px;
+        }
+        .topic-input input {
+            padding: 8px 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 20px;
+            font-size: 14px;
+            outline: none;
+            width: 200px;
+            margin-right: 10px;
+        }
+        .topic-input input:focus {
+            border-color: #667eea;
+        }
+        .topic-input button {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .topic-input button:hover {
+            background: #5a6fd8;
+        }
+        .thread-indicator {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -224,6 +371,28 @@
             <button class="logout-button" onclick="signOut()">Logout</button>
         </div>
 
+        <!-- Topic Selector -->
+        <div class="topic-selector" id="topicSelector">
+            <div class="topic-tabs" id="topicTabs">
+                <!-- Topic tabs will be dynamically added here -->
+            </div>
+            <button class="add-topic-btn" id="addTopicBtn" onclick="showAddTopic()">+ New Topic</button>
+            <div class="topic-input" id="topicInput">
+                <input type="text" id="topicNameInput" placeholder="Enter topic name..." maxlength="20">
+                <button onclick="addTopic()">Add</button>
+                <button onclick="hideAddTopic()">Cancel</button>
+            </div>
+            <div class="thread-indicator" id="threadIndicator">Thread: General</div>
+        </div>
+
+        <!-- Countdown Widget -->
+        <div class="countdown-widget" id="countdownWidget">
+            <button class="countdown-close" onclick="hideCountdown()">&times;</button>
+            <h3>⏰ Next Reminder</h3>
+            <div class="countdown-timer" id="countdownTimer">00:00:00</div>
+            <div class="countdown-description" id="countdownDescription">Loading...</div>
+        </div>
+
         <!-- Chat Section -->
         <div class="chat-container" id="chatContainer">
             <div class="message ai-message">
@@ -250,6 +419,12 @@
         const API_URL = '{{ api_url }}ai';
         let currentUser = null;
         let accessToken = null;
+        let countdownInterval = null;
+        let nextReminder = null;
+        let currentTopic = 'General';
+        let topics = ['General'];
+        let maxTopics = 3;
+        let currentUserId = null;
 
         // Initialize Cognito
         const userPool = new AmazonCognitoIdentity.CognitoUserPool(COGNITO_CONFIG);
@@ -266,6 +441,15 @@
                     } else {
                         currentUser = cognitoUser;
                         accessToken = session.getAccessToken().getJwtToken();
+                        
+                        // Get user ID for topic isolation
+                        currentUser.getUserAttributes((err, attributes) => {
+                            if (!err) {
+                                const subAttr = attributes.find(attr => attr.getName() === 'sub');
+                                currentUserId = subAttr ? subAttr.getValue() : null;
+                            }
+                        });
+                        
                         showChat();
                     }
                 });
@@ -284,8 +468,16 @@
         function showChat() {
             document.getElementById('authContainer').style.display = 'none';
             document.getElementById('userInfo').style.display = 'block';
+            document.getElementById('topicSelector').style.display = 'block';
             document.getElementById('chatContainer').style.display = 'block';
             document.getElementById('inputContainer').style.display = 'block';
+            
+            // Load user-specific topics
+            loadUserTopics();
+            
+            // Setup event listeners for chat interface
+            setupEnterKeyListener();
+            setupInputListener();
             
             // Update user display
             if (currentUser) {
@@ -324,6 +516,15 @@
                 onSuccess: (result) => {
                     currentUser = cognitoUser;
                     accessToken = result.getAccessToken().getJwtToken();
+                    
+                    // Get user ID for topic isolation
+                    currentUser.getUserAttributes((err, attributes) => {
+                        if (!err) {
+                            const subAttr = attributes.find(attr => attr.getName() === 'sub');
+                            currentUserId = subAttr ? subAttr.getValue() : null;
+                        }
+                    });
+                    
                     showChat();
                 },
                 onFailure: (err) => {
@@ -360,6 +561,9 @@
             }
             currentUser = null;
             accessToken = null;
+            currentUserId = null;
+            currentTopic = 'General';
+            topics = ['General'];
             showAuth();
         }
 
@@ -395,6 +599,183 @@
             document.getElementById('chatContainer').scrollTop = document.getElementById('chatContainer').scrollHeight;
         }
 
+        function formatTime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function updateCountdown() {
+            if (!nextReminder) {
+                hideCountdown();
+                return;
+            }
+
+            const now = Math.floor(Date.now() / 1000);
+            const timeLeft = nextReminder.time_until_seconds - now;
+            
+            if (timeLeft <= 0) {
+                // Reminder is due, hide countdown and refresh
+                hideCountdown();
+                nextReminder = null;
+                return;
+            }
+
+            document.getElementById('countdownTimer').textContent = formatTime(timeLeft);
+            document.getElementById('countdownDescription').textContent = nextReminder.reminder_text;
+        }
+
+        function showCountdown(reminderData) {
+            if (!reminderData) {
+                hideCountdown();
+                return;
+            }
+
+            nextReminder = reminderData;
+            document.getElementById('countdownWidget').style.display = 'block';
+            updateCountdown();
+            
+            // Update countdown every second
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            countdownInterval = setInterval(updateCountdown, 1000);
+        }
+
+        function hideCountdown() {
+            document.getElementById('countdownWidget').style.display = 'none';
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            nextReminder = null;
+        }
+
+        function renderTopics() {
+            const topicTabs = document.getElementById('topicTabs');
+            topicTabs.innerHTML = '';
+            
+            topics.forEach(topic => {
+                const tab = document.createElement('div');
+                tab.className = `topic-tab ${topic === currentTopic ? 'active' : ''}`;
+                tab.innerHTML = `
+                    ${topic}
+                    ${topic !== 'General' ? '<button class="close-btn" onclick="removeTopic(\'' + topic + '\')">&times;</button>' : ''}
+                `;
+                tab.onclick = () => switchTopic(topic);
+                topicTabs.appendChild(tab);
+            });
+            
+            // Show/hide add button based on topic count
+            const addBtn = document.getElementById('addTopicBtn');
+            addBtn.style.display = topics.length < maxTopics ? 'block' : 'none';
+            
+            // Update thread indicator
+            document.getElementById('threadIndicator').textContent = `Thread: ${currentTopic}`;
+        }
+
+        function switchTopic(topic) {
+            if (topic === currentTopic) return;
+            
+            // Clear current chat
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = '<div class="message ai-message"><strong>AI Assistant:</strong> Hello! I\'m your Better Bubble AI assistant. How can I help you today?</div>';
+            
+            // Switch topic
+            currentTopic = topic;
+            renderTopics();
+            
+            // Add topic switch message
+            addMessage(`Switched to "${topic}" conversation thread.`, false);
+        }
+
+        function showAddTopic() {
+            document.getElementById('topicInput').style.display = 'block';
+            document.getElementById('topicNameInput').focus();
+        }
+
+        function hideAddTopic() {
+            document.getElementById('topicInput').style.display = 'none';
+            document.getElementById('topicNameInput').value = '';
+        }
+
+        function addTopic() {
+            const topicName = document.getElementById('topicNameInput').value.trim();
+            if (!topicName) return;
+            
+            if (topics.includes(topicName)) {
+                showError('Topic already exists!');
+                return;
+            }
+            
+            if (topics.length >= maxTopics) {
+                showError(`Maximum ${maxTopics} topics allowed!`);
+                return;
+            }
+            
+            topics.push(topicName);
+            saveUserTopics();
+            switchTopic(topicName);
+            hideAddTopic();
+        }
+
+        function removeTopic(topic) {
+            if (topic === 'General') return;
+            
+            if (topics.length <= 1) {
+                showError('Cannot remove the last topic!');
+                return;
+            }
+            
+            const index = topics.indexOf(topic);
+            if (index > -1) {
+                topics.splice(index, 1);
+            }
+            
+            // Save topics for this user
+            saveUserTopics();
+            
+            // If we're removing the current topic, switch to General
+            if (currentTopic === topic) {
+                switchTopic('General');
+            } else {
+                renderTopics();
+            }
+        }
+
+        function loadUserTopics() {
+            if (!currentUserId) return;
+            
+            try {
+                const savedTopics = localStorage.getItem(`topics_${currentUserId}`);
+                if (savedTopics) {
+                    const parsedTopics = JSON.parse(savedTopics);
+                    if (Array.isArray(parsedTopics) && parsedTopics.length > 0) {
+                        topics = parsedTopics;
+                        currentTopic = topics[0]; // Start with first topic
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading user topics:', error);
+                // Fallback to default
+                topics = ['General'];
+                currentTopic = 'General';
+            }
+            
+            renderTopics();
+        }
+
+        function saveUserTopics() {
+            if (!currentUserId) return;
+            
+            try {
+                localStorage.setItem(`topics_${currentUserId}`, JSON.stringify(topics));
+            } catch (error) {
+                console.error('Error saving user topics:', error);
+            }
+        }
+
         function showError(message) {
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error';
@@ -422,13 +803,33 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${accessToken}`
                     },
-                    body: JSON.stringify({ message: message })
+                    body: JSON.stringify({ 
+                        message: message,
+                        topic: currentTopic
+                    })
                 });
 
                 const data = await response.json();
                 
                 if (response.ok) {
                     addMessage(data.response);
+                    
+                    // Handle countdown display
+                    if (data.next_reminder) {
+                        showCountdown(data.next_reminder);
+                    } else {
+                        hideCountdown();
+                    }
+                    
+                    // Show reminder creation feedback
+                    if (data.reminder_created) {
+                        addMessage('✅ Reminder created! I\'ll remind you about this when it\'s time.', false);
+                    }
+                    
+                    // Show due reminders count
+                    if (data.due_reminders_count > 0) {
+                        addMessage(`🔔 You have ${data.due_reminders_count} reminder(s) that are due!`, false);
+                    }
                 } else {
                     addMessage('Error: ' + (data.error || 'Something went wrong'), false);
                 }
@@ -442,15 +843,60 @@
             }
         }
 
-        // Allow sending with Enter key
-        document.getElementById('messageInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                sendMessage();
+        // Enhanced Enter key handling
+        function setupEnterKeyListener() {
+            const messageInput = document.getElementById('messageInput');
+            if (messageInput) {
+                messageInput.addEventListener('keydown', function(e) {
+                    console.log('Key pressed:', e.key, 'Shift:', e.shiftKey);
+                    if (e.key === 'Enter') {
+                        if (e.shiftKey) {
+                            // Shift+Enter: Allow new line (default behavior)
+                            console.log('Shift+Enter: Allowing new line');
+                            return;
+                        } else {
+                            // Enter: Send message
+                            console.log('Enter: Sending message');
+                            e.preventDefault();
+                            sendMessage();
+                        }
+                    }
+                });
+                console.log('Enter key listener attached');
+            } else {
+                console.log('Message input not found, retrying...');
+                setTimeout(setupEnterKeyListener, 100);
             }
-        });
+        }
+
+        // Add visual feedback for typing
+        function setupInputListener() {
+            const messageInput = document.getElementById('messageInput');
+            if (messageInput) {
+                messageInput.addEventListener('input', function(e) {
+                    const message = e.target.value.trim();
+                    if (message && accessToken) {
+                        // Could add typing indicator here if needed
+                    }
+                });
+            } else {
+                setTimeout(setupInputListener, 100);
+            }
+        }
 
         // Initialize app
         checkAuth();
+        
+        // Setup event listeners after DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setupEnterKeyListener();
+                setupInputListener();
+            });
+        } else {
+            setupEnterKeyListener();
+            setupInputListener();
+        }
     </script>
 </body>
 </html>

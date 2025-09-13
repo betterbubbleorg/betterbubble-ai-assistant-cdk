@@ -138,6 +138,28 @@ class DynamoDBStack(Stack):
             time_to_live_attribute="ttl"
         )
 
+        # Reminders table - stores persistent reminders and memories
+        self.reminders_table = dynamodb.Table(
+            self, "RemindersTable",
+            table_name=config.generate_stack_name("reminders"),
+            partition_key=dynamodb.Attribute(
+                name="user_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="reminder_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
+            encryption_key=self.encryption_key,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+            time_to_live_attribute="ttl"
+        )
+
         # Add GSI for tasks by status
         self.tasks_table.add_global_secondary_index(
             index_name="status-index",
@@ -166,6 +188,129 @@ class DynamoDBStack(Stack):
 
         # Add GSI for notes by category
         self.notes_table.add_global_secondary_index(
+            index_name="category-index",
+            partition_key=dynamodb.Attribute(
+                name="category",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="created_at",
+                type=dynamodb.AttributeType.STRING
+            )
+        )
+
+        # Add GSI for reminders by due date
+        self.reminders_table.add_global_secondary_index(
+            index_name="due-date-index",
+            partition_key=dynamodb.Attribute(
+                name="user_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="due_date",
+                type=dynamodb.AttributeType.STRING
+            )
+        )
+
+        # Add GSI for conversations by topic
+        self.conversations_table.add_global_secondary_index(
+            index_name="topic-index",
+            partition_key=dynamodb.Attribute(
+                name="user_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="topic",
+                type=dynamodb.AttributeType.STRING
+            )
+        )
+
+        # Search History table - tracks web search results to avoid repetition
+        self.search_history_table = dynamodb.Table(
+            self, "SearchHistoryTable",
+            table_name=config.generate_stack_name("search-history"),
+            partition_key=dynamodb.Attribute(
+                name="user_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="search_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
+            encryption_key=self.encryption_key,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+            time_to_live_attribute="ttl"
+        )
+
+        # Add GSI for search history by topic
+        self.search_history_table.add_global_secondary_index(
+            index_name="topic-index",
+            partition_key=dynamodb.Attribute(
+                name="user_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="topic",
+                type=dynamodb.AttributeType.STRING
+            )
+        )
+
+        # Admin Knowledge table - stores permanent admin-defined knowledge
+        self.admin_knowledge_table = dynamodb.Table(
+            self, "AdminKnowledgeTable",
+            table_name=config.generate_stack_name("admin-knowledge"),
+            partition_key=dynamodb.Attribute(
+                name="knowledge_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
+            encryption_key=self.encryption_key,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+            time_to_live_attribute="ttl"
+        )
+
+        # Budget table - stores spending and budget tracking for BetterBubble
+        self.budget_table = dynamodb.Table(
+            self, "BudgetTable",
+            table_name=config.generate_stack_name("budget"),
+            partition_key=dynamodb.Attribute(
+                name="budget_id",
+                type=dynamodb.AttributeType.STRING
+            ),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption=dynamodb.TableEncryption.CUSTOMER_MANAGED,
+            encryption_key=self.encryption_key,
+            point_in_time_recovery_specification=dynamodb.PointInTimeRecoverySpecification(
+                point_in_time_recovery_enabled=True
+            ),
+            removal_policy=RemovalPolicy.DESTROY,
+            time_to_live_attribute="ttl"
+        )
+
+        # Add GSI for budget by organization
+        self.budget_table.add_global_secondary_index(
+            index_name="organization-index",
+            partition_key=dynamodb.Attribute(
+                name="organization",
+                type=dynamodb.AttributeType.STRING
+            ),
+            sort_key=dynamodb.Attribute(
+                name="created_at",
+                type=dynamodb.AttributeType.STRING
+            )
+        )
+
+        # Add GSI for budget by category
+        self.budget_table.add_global_secondary_index(
             index_name="category-index",
             partition_key=dynamodb.Attribute(
                 name="category",

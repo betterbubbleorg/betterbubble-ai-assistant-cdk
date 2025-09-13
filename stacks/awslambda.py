@@ -54,6 +54,14 @@ class LambdaStack(Stack):
                 table_arns.append(dynamodb_stack.notes_table.table_arn)
             if hasattr(dynamodb_stack, 'conversations_table'):
                 table_arns.append(dynamodb_stack.conversations_table.table_arn)
+            if hasattr(dynamodb_stack, 'reminders_table'):
+                table_arns.append(dynamodb_stack.reminders_table.table_arn)
+            if hasattr(dynamodb_stack, 'search_history_table'):
+                table_arns.append(dynamodb_stack.search_history_table.table_arn)
+            if hasattr(dynamodb_stack, 'admin_knowledge_table'):
+                table_arns.append(dynamodb_stack.admin_knowledge_table.table_arn)
+            if hasattr(dynamodb_stack, 'budget_table'):
+                table_arns.append(dynamodb_stack.budget_table.table_arn)
             
             if table_arns:
                 self.lambda_role.add_to_policy(
@@ -70,6 +78,26 @@ class LambdaStack(Stack):
                         resources=table_arns
                     )
                 )
+                
+                # Add permissions for GSI indexes
+                gsi_arns = []
+                if hasattr(dynamodb_stack, 'search_history_table'):
+                    gsi_arns.append(f"{dynamodb_stack.search_history_table.table_arn}/index/*")
+                if hasattr(dynamodb_stack, 'conversations_table'):
+                    gsi_arns.append(f"{dynamodb_stack.conversations_table.table_arn}/index/*")
+                if hasattr(dynamodb_stack, 'reminders_table'):
+                    gsi_arns.append(f"{dynamodb_stack.reminders_table.table_arn}/index/*")
+                
+                if gsi_arns:
+                    self.lambda_role.add_to_policy(
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "dynamodb:Query"
+                            ],
+                            resources=gsi_arns
+                        )
+                    )
 
         # Add Bedrock permissions
         self.lambda_role.add_to_policy(
@@ -97,6 +125,22 @@ class LambdaStack(Stack):
                         resources=[dynamodb_stack.encryption_key.key_arn]
                     )
                 )
+
+        # Add SSM permissions for API keys
+        self.lambda_role.add_to_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                ],
+                resources=[
+                    f"arn:aws:ssm:us-west-2:{self.account}:parameter/betterbubble-ai-assistant/search/google-api-key",
+                    f"arn:aws:ssm:us-west-2:{self.account}:parameter/betterbubble-ai-assistant/search/google-search-engine-id",
+                    f"arn:aws:ssm:us-west-2:{self.account}:parameter/betterbubble-ai-assistant/search/bing-api-key"
+                ]
+            )
+        )
 
         # Task Manager Lambda Function
         self.task_manager_lambda = lambda_.Function(
@@ -145,8 +189,18 @@ class LambdaStack(Stack):
             ),
             environment={
                 'CONVERSATIONS_TABLE_NAME': stacks['dynamodb'].conversations_table.table_name if stacks and 'dynamodb' in stacks else '',
+                'REMINDERS_TABLE_NAME': stacks['dynamodb'].reminders_table.table_name if stacks and 'dynamodb' in stacks else '',
+                'USERS_TABLE_NAME': stacks['dynamodb'].users_table.table_name if stacks and 'dynamodb' in stacks else '',
+                'TASKS_TABLE_NAME': stacks['dynamodb'].tasks_table.table_name if stacks and 'dynamodb' in stacks else '',
+                'SEARCH_HISTORY_TABLE_NAME': stacks['dynamodb'].search_history_table.table_name if stacks and 'dynamodb' in stacks else '',
+                'ADMIN_KNOWLEDGE_TABLE_NAME': stacks['dynamodb'].admin_knowledge_table.table_name if stacks and 'dynamodb' in stacks else '',
+                'BUDGET_TABLE_NAME': stacks['dynamodb'].budget_table.table_name if stacks and 'dynamodb' in stacks else '',
                 'COGNITO_USER_POOL_ID': stacks['cognito'].user_pool.user_pool_id if stacks and 'cognito' in stacks else '',
-                'COGNITO_USER_POOL_CLIENT_ID': stacks['cognito'].user_pool_client.user_pool_client_id if stacks and 'cognito' in stacks else ''
+                'COGNITO_USER_POOL_CLIENT_ID': stacks['cognito'].user_pool_client.user_pool_client_id if stacks and 'cognito' in stacks else '',
+                'ADMIN_API_KEY': 'admin-key-2024',
+                'GOOGLE_API_KEY_PARAM': '/betterbubble-ai-assistant/search/google-api-key',
+                'GOOGLE_SEARCH_ENGINE_ID_PARAM': '/betterbubble-ai-assistant/search/google-search-engine-id',
+                'BING_API_KEY_PARAM': '/betterbubble-ai-assistant/search/bing-api-key'
             }
         )
 
@@ -221,6 +275,45 @@ class LambdaStack(Stack):
 
         ai_resource = self.api.root.add_resource("ai")
         ai_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
+
+        # Admin endpoints
+        admin_resource = self.api.root.add_resource("admin")
+        
+        # Admin users endpoints
+        admin_users_resource = admin_resource.add_resource("users")
+        admin_users_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
+        admin_users_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
+        
+        # Admin users/{id} endpoints
+        admin_user_resource = admin_users_resource.add_resource("{id}")
+        admin_user_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
+        admin_user_resource.add_method(
+            "DELETE",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
+        
+        # Admin stats endpoint
+        admin_stats_resource = admin_resource.add_resource("stats")
+        admin_stats_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
+        
+        # Admin cleanup endpoint
+        admin_cleanup_resource = admin_resource.add_resource("cleanup")
+        admin_cleanup_resource.add_method(
             "POST",
             apigateway.LambdaIntegration(self.ai_assistant_lambda)
         )
