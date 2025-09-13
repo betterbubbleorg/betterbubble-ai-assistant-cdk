@@ -121,10 +121,26 @@ class FrontendStack(Stack):
             api_url=api_url
         )
 
+        # Load and render debug template
+        debug_template_path = os.path.join(os.path.dirname(__file__), '..', 'templates', 'debug_session.html')
+        with open(debug_template_path, 'r') as f:
+            debug_template_content = f.read()
+        
+        debug_template = Template(debug_template_content)
+        debug_html_content = debug_template.render(
+            cognito_user_pool_id=cognito_user_pool_id,
+            cognito_client_id=cognito_client_id,
+            cognito_identity_pool_id=cognito_identity_pool_id,
+            api_url=api_url
+        )
+
         # Deploy HTML content to S3
         s3_deployment.BucketDeployment(
             self, "ChatbotDeployment",
-            sources=[s3_deployment.Source.data("index.html", html_content)],
+            sources=[
+                s3_deployment.Source.data("index.html", html_content),
+                s3_deployment.Source.data("debug_session.html", debug_html_content)
+            ],
             destination_bucket=self.hosting_bucket,
             distribution=self.distribution,
             distribution_paths=["/*"]

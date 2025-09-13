@@ -188,7 +188,15 @@
             padding: 8px 16px;
             border-radius: 4px;
             cursor: pointer;
-            float: right;
+            margin-left: 10px;
+        }
+        .admin-panel-button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
         }
         .countdown-widget {
             background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
@@ -368,7 +376,10 @@
         <!-- User Info Section -->
         <div class="user-info" id="userInfo">
             <span id="userDisplayName">Welcome!</span>
-            <button class="logout-button" onclick="signOut()">Logout</button>
+            <div style="float: right;">
+                <button class="admin-panel-button" id="adminPanelButton" onclick="openAdminPanel()" style="display: none;">🔧 Admin Panel</button>
+                <button class="logout-button" onclick="signOut()">Logout</button>
+            </div>
         </div>
 
         <!-- Topic Selector -->
@@ -425,6 +436,7 @@
         let topics = ['General'];
         let maxTopics = 3;
         let currentUserId = null;
+        let isAdmin = false;
 
         // Initialize Cognito
         const userPool = new AmazonCognitoIdentity.CognitoUserPool(COGNITO_CONFIG);
@@ -432,30 +444,118 @@
 
         // Check if user is already authenticated
         function checkAuth() {
-            const cognitoUser = userPool.getCurrentUser();
-            if (cognitoUser) {
-                cognitoUser.getSession((err, session) => {
-                    if (err) {
-                        console.log('Session error:', err);
-                        showAuth();
-                    } else {
-                        currentUser = cognitoUser;
-                        accessToken = session.getAccessToken().getJwtToken();
-                        
-                        // Get user ID for topic isolation
-                        currentUser.getUserAttributes((err, attributes) => {
-                            if (!err) {
-                                const subAttr = attributes.find(attr => attr.getName() === 'sub');
-                                currentUserId = subAttr ? subAttr.getValue() : null;
+            console.log('Checking authentication...');
+            
+            // Always check localStorage first for better persistence
+            const storedUsername = localStorage.getItem('cognito_username');
+            if (storedUsername) {
+                console.log('Found stored username:', storedUsername);
+                restoreSessionFromStorage(storedUsername);
+            } else {
+                console.log('No stored credentials found, checking Cognito...');
+                // Fallback to Cognito's getCurrentUser
+                const cognitoUser = userPool.getCurrentUser();
+                if (cognitoUser) {
+                    console.log('Found current user from Cognito, checking session...');
+                    cognitoUser.getSession((err, session) => {
+                        if (err) {
+                            console.log('Session error:', err);
+                            showAuth();
+                        } else {
+                            console.log('Valid session found');
+                            handleSuccessfulAuth(cognitoUser, session);
+                        }
+                    });
+                } else {
+                    console.log('No current user found');
+                    showAuth();
+                }
+            }
+        }
+
+        // Restore session from localStorage
+        function restoreSessionFromStorage(storedUsername) {
+            console.log('Restoring session for user:', storedUsername);
+            
+            // Create a new Cognito user and try to get session
+            const userData = {
+                Username: storedUsername,
+                Pool: userPool
+            };
+            const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
+            
+            cognitoUser.getSession((err, session) => {
+                if (err) {
+                    console.log('Stored session invalid:', err);
+                    // If session is invalid, try to refresh using stored refresh token
+                    const refreshToken = localStorage.getItem('cognito_refresh_token');
+                    if (refreshToken) {
+                        console.log('Attempting to refresh with stored refresh token...');
+                        cognitoUser.refreshSession(refreshToken, (refreshErr, refreshSession) => {
+                            if (refreshErr) {
+                                console.log('Session refresh failed:', refreshErr);
+                                localStorage.removeItem('cognito_username');
+                                localStorage.removeItem('cognito_refresh_token');
+                                showAuth();
+                            } else {
+                                console.log('Session refreshed successfully');
+                                // Store the new refresh token
+                                localStorage.setItem('cognito_refresh_token', refreshSession.getRefreshToken().getToken());
+                                handleSuccessfulAuth(cognitoUser, refreshSession);
                             }
                         });
-                        
-                        showChat();
+                    } else {
+                        console.log('No refresh token available');
+                        localStorage.removeItem('cognito_username');
+                        showAuth();
                     }
-                });
-            } else {
-                showAuth();
-            }
+                } else {
+                    console.log('Restored session from storage');
+                    // Store refresh token for future use
+                    localStorage.setItem('cognito_refresh_token', session.getRefreshToken().getToken());
+                    handleSuccessfulAuth(cognitoUser, session);
+                }
+            });
+        }
+
+        // Refresh session if it's expired
+        function refreshSession(cognitoUser) {
+            console.log('Attempting to refresh session...');
+            cognitoUser.getSession((err, session) => {
+                if (err) {
+                    console.log('Session refresh failed:', err);
+                    localStorage.removeItem('cognito_username');
+                    showAuth();
+                } else {
+                    console.log('Session refreshed successfully');
+                    handleSuccessfulAuth(cognitoUser, session);
+                }
+            });
+        }
+
+        // Handle successful authentication
+        function handleSuccessfulAuth(cognitoUser, session) {
+            currentUser = cognitoUser;
+            accessToken = session.getAccessToken().getJwtToken();
+            
+            // Store username and refresh token for future sessions
+            localStorage.setItem('cognito_username', cognitoUser.getUsername());
+            localStorage.setItem('cognito_refresh_token', session.getRefreshToken().getToken());
+            
+            // Get user ID for topic isolation
+            currentUser.getUserAttributes((err, attributes) => {
+                if (!err) {
+                    const subAttr = attributes.find(attr => attr.getName() === 'sub');
+                    currentUserId = subAttr ? subAttr.getValue() : null;
+                    
+                    // Check admin status after user ID is set
+                    if (currentUserId) {
+                        checkAdminStatus();
+                    }
+                }
+            });
+            
+            showChat();
         }
 
         function showAuth() {
@@ -517,11 +617,20 @@
                     currentUser = cognitoUser;
                     accessToken = result.getAccessToken().getJwtToken();
                     
+                    // Store username and refresh token for future sessions
+                    localStorage.setItem('cognito_username', cognitoUser.getUsername());
+                    localStorage.setItem('cognito_refresh_token', result.getRefreshToken().getToken());
+                    
                     // Get user ID for topic isolation
                     currentUser.getUserAttributes((err, attributes) => {
                         if (!err) {
                             const subAttr = attributes.find(attr => attr.getName() === 'sub');
                             currentUserId = subAttr ? subAttr.getValue() : null;
+                            
+                            // Check admin status after user ID is set
+                            if (currentUserId) {
+                                checkAdminStatus();
+                            }
                         }
                     });
                     
@@ -564,6 +673,11 @@
             currentUserId = null;
             currentTopic = 'General';
             topics = ['General'];
+            
+            // Clear stored credentials
+            localStorage.removeItem('cognito_username');
+            localStorage.removeItem('cognito_refresh_token');
+            
             showAuth();
         }
 
@@ -882,6 +996,61 @@
             } else {
                 setTimeout(setupInputListener, 100);
             }
+        }
+
+        // Check if user is admin
+        async function checkAdminStatus() {
+            console.log('Checking admin status...', { currentUserId, accessToken: !!accessToken });
+            
+            if (!currentUserId || !accessToken) {
+                console.log('Missing currentUserId or accessToken, skipping admin check');
+                return;
+            }
+            
+            try {
+                const apiUrl = `${API_URL.replace('/ai', '')}/admin/check-status`;
+                console.log('Calling admin status API:', apiUrl);
+                
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`
+                    }
+                });
+                
+                console.log('Admin status response:', response.status, response.statusText);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Admin status data:', data);
+                    isAdmin = data.is_admin || false;
+                    
+                    // Show/hide admin panel button
+                    const adminButton = document.getElementById('adminPanelButton');
+                    console.log('Admin button element:', adminButton);
+                    
+                    if (adminButton) {
+                        adminButton.style.display = isAdmin ? 'inline-block' : 'none';
+                        console.log('Admin button display set to:', adminButton.style.display);
+                    }
+                    
+                    if (isAdmin) {
+                        console.log('✅ User is admin - admin features enabled');
+                    } else {
+                        console.log('❌ User is not admin');
+                    }
+                } else {
+                    const errorText = await response.text();
+                    console.error('Admin status check failed:', response.status, errorText);
+                }
+            } catch (error) {
+                console.error('Error checking admin status:', error);
+            }
+        }
+        
+        // Open admin panel
+        function openAdminPanel() {
+            window.open('https://dlzki3kkd9171.cloudfront.net', '_blank');
         }
 
         // Initialize app

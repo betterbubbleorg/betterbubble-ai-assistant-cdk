@@ -116,10 +116,10 @@ def get_admin_knowledge(dynamodb):
         # Format knowledge for the AI
         knowledge_text = ""
         if knowledge_items:
-            knowledge_text = "\n\n🧠 ADMIN PERMANENT KNOWLEDGE (ALWAYS TRUE, OVERRIDES ALL OTHER SOURCES):\n"
+            knowledge_text = "\n\n🧠 ADMIN FACTS (ALWAYS TRUE):\n"
             for item in knowledge_items:
                 knowledge_text += f"- {item.get('knowledge', '')}\n"
-            knowledge_text += "\nIMPORTANT: The above knowledge is permanently set by admin and must always be considered true, even if web search results contradict it.\n"
+            knowledge_text += "\nThese facts override all other information. When correcting users, be brief and direct.\n"
         
         return knowledge_text
         
@@ -822,14 +822,7 @@ def build_conversation_prompt(user_message, conversation_history, reminder_conte
     current_time = get_current_datetime()
     
     # System prompt for the AI assistant
-    system_prompt = f"""You are a helpful AI personal assistant with advanced real-time web search and deep research capabilities. You can:
-
-    🔍 COMPREHENSIVE RESEARCH CAPABILITIES:
-    - Perform multi-phase web searches to build complete knowledge
-    - Generate follow-up queries to explore topics deeply
-    - Crawl websites to extract detailed information
-    - Learn and iterate to avoid repeating the same sources
-    - Build comprehensive understanding through multiple research rounds
+    system_prompt = f"""You are a helpful AI personal assistant. Be concise and direct in your responses.
 
     📅 CURRENT DATE AND TIME INFORMATION:
     - Today is {current_time['full_datetime']}
@@ -838,8 +831,6 @@ def build_conversation_prompt(user_message, conversation_history, reminder_conte
     - Day of the week: {current_time['day_of_week']}
     - Month: {current_time['month']}
     - Year: {current_time['year']}
-
-    You can help users with date and time questions using this information.
 
     🔔 REMINDER CAPABILITIES:
     You can help users create reminders by recognizing phrases like:
@@ -851,11 +842,10 @@ def build_conversation_prompt(user_message, conversation_history, reminder_conte
     When you see these phrases, create a reminder for the user.
 
     🌐 WEB SEARCH INSTRUCTIONS:
-    - Use the comprehensive web search results provided below
-    - The system has performed deep research including follow-up queries and website crawling
-    - Always reference and cite the sources when providing information
-    - Synthesize information from multiple sources to provide complete answers
-    - If the search results are comprehensive, provide detailed, well-researched responses"""
+    - Use the web search results provided below when relevant
+    - Be brief and to the point
+    - If admin facts contradict user questions, correct them directly and briefly
+    - Keep responses concise unless detailed information is specifically requested"""
     
     # Add web search results if available
     web_search_context = ""
@@ -1630,6 +1620,83 @@ def handle_admin_request(event, context):
             'body': json.dumps({'error': 'Internal server error'})
         }
 
+def handle_admin_status_check(event, context):
+    """Handle admin status check request"""
+    try:
+        # Extract and verify JWT token
+        auth_header = event.get('headers', {}).get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return {
+                'statusCode': 401,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                    'Access-Control-Allow-Methods': 'GET, OPTIONS'
+                },
+                'body': json.dumps({'error': 'No valid authorization header'})
+            }
+        
+        token = auth_header.split(' ')[1]
+        user_pool_id = os.environ.get('COGNITO_USER_POOL_ID')
+        
+        # Verify JWT token
+        payload = verify_jwt_token(token, user_pool_id)
+        if not payload:
+            return {
+                'statusCode': 401,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                    'Access-Control-Allow-Methods': 'GET, OPTIONS'
+                },
+                'body': json.dumps({'error': 'Invalid token'})
+            }
+        
+        user_id = payload.get('sub')
+        if not user_id:
+            return {
+                'statusCode': 401,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                    'Access-Control-Allow-Methods': 'GET, OPTIONS'
+                },
+                'body': json.dumps({'error': 'No user ID in token'})
+            }
+        
+        # Check if user is admin
+        is_admin = is_user_admin(user_id, dynamodb)
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS'
+            },
+            'body': json.dumps({
+                'is_admin': is_admin,
+                'user_id': user_id
+            })
+        }
+        
+    except Exception as e:
+        print(f"Error in admin status check: {str(e)}")
+        return {
+            'statusCode': 500,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS'
+            },
+            'body': json.dumps({'error': 'Internal server error'})
+        }
+
 def handler(event, context):
     try:
         # Handle CORS preflight
@@ -1648,7 +1715,9 @@ def handler(event, context):
         
         # Check if this is an admin request
         path = event.get('path', '')
-        if path.startswith('/admin'):
+        if path == '/admin/check-status':
+            return handle_admin_status_check(event, context)
+        elif path.startswith('/admin'):
             return handle_admin_request(event, context)
         
         # Regular chatbot request

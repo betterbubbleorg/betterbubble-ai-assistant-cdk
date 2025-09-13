@@ -89,8 +89,8 @@ class CognitoStack(Stack):
                 ]
             ),
             refresh_token_validity=Duration.days(30),
-            access_token_validity=Duration.hours(1),
-            id_token_validity=Duration.hours(1)
+            access_token_validity=Duration.hours(8),
+            id_token_validity=Duration.hours(8)
         )
 
         # Create Identity Pool for AWS credentials

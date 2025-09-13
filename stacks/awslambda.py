@@ -317,6 +317,31 @@ class LambdaStack(Stack):
             "POST",
             apigateway.LambdaIntegration(self.ai_assistant_lambda)
         )
+        
+        # Admin check-status endpoint
+        admin_check_status_resource = admin_resource.add_resource("check-status")
+        admin_check_status_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
+        
+        # Admin knowledge endpoints
+        admin_knowledge_resource = admin_resource.add_resource("knowledge")
+        admin_knowledge_resource.add_method(
+            "GET",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
+        admin_knowledge_resource.add_method(
+            "POST",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
+        
+        # Admin knowledge/{id} endpoints
+        admin_knowledge_id_resource = admin_knowledge_resource.add_resource("{id}")
+        admin_knowledge_id_resource.add_method(
+            "DELETE",
+            apigateway.LambdaIntegration(self.ai_assistant_lambda)
+        )
 
         # Health check endpoint
         health_resource = self.api.root.add_resource("health")

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Session Debug Tool</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1000.0.min.js"></script>
+    <script src="https://unpkg.com/amazon-cognito-identity-js@6.0.0/dist/amazon-cognito-identity.min.js"></script>
+</head>
+<body>
+    <h1>Session Debug Tool</h1>
+    <div id="debug-output"></div>
+    <button onclick="testSession()">Test Session</button>
+    <button onclick="clearStorage()">Clear Storage</button>
+    <button onclick="showStorage()">Show Storage</button>
+
+    <script>
+        // Cognito configuration (same as chatbot)
+        const COGNITO_CONFIG = {
+            UserPoolId: 'us-west-2_ZwFXEteBu',
+            ClientId: '5e9s5n6ie7ueqicjq434v36aku',
+            IdentityPoolId: 'us-west-2:f97d72cd-59e4-4908-9859-4f10413d877b'
+        };
+
+        const userPool = new AmazonCognitoIdentity.CognitoUserPool(COGNITO_CONFIG);
+
+        function log(message) {
+            const output = document.getElementById('debug-output');
+            output.innerHTML += '<div>' + new Date().toLocaleTimeString() + ': ' + message + '</div>';
+            console.log(message);
+        }
+
+        function testSession() {
+            log('=== Starting Session Test ===');
+            
+            // Check localStorage
+            const storedUsername = localStorage.getItem('cognito_username');
+            const storedRefreshToken = localStorage.getItem('cognito_refresh_token');
+            
+            log('Stored username: ' + (storedUsername || 'NONE'));
+            log('Stored refresh token: ' + (storedRefreshToken ? 'EXISTS' : 'NONE'));
+            
+            if (storedUsername) {
+                log('Attempting to restore session for: ' + storedUsername);
+                
+                const userData = {
+                    Username: storedUsername,
+                    Pool: userPool
+                };
+                const cognitoUser = new AmazonCognitoIdentity.CognitoUser(userData);
+                
+                cognitoUser.getSession((err, session) => {
+                    if (err) {
+                        log('Session error: ' + err.message);
+                        log('Error code: ' + err.code);
+                        
+                        // Try refresh
+                        if (storedRefreshToken) {
+                            log('Attempting refresh with stored token...');
+                            cognitoUser.refreshSession(storedRefreshToken, (refreshErr, refreshSession) => {
+                                if (refreshErr) {
+                                    log('Refresh failed: ' + refreshErr.message);
+                                    log('Refresh error code: ' + refreshErr.code);
+                                } else {
+                                    log('Refresh SUCCESS!');
+                                    log('New access token: ' + refreshSession.getAccessToken().getJwtToken().substring(0, 50) + '...');
+                                }
+                            });
+                        }
+                    } else {
+                        log('Session SUCCESS!');
+                        log('Access token: ' + session.getAccessToken().getJwtToken().substring(0, 50) + '...');
+                        log('Token expires: ' + new Date(session.getAccessToken().getExpiration() * 1000));
+                        log('Refresh token: ' + session.getRefreshToken().getToken().substring(0, 50) + '...');
+                    }
+                });
+            } else {
+                log('No stored username found');
+            }
+        }
+
+        function clearStorage() {
+            localStorage.removeItem('cognito_username');
+            localStorage.removeItem('cognito_refresh_token');
+            log('Storage cleared');
+        }
+
+        function showStorage() {
+            log('=== Current Storage ===');
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                log(key + ': ' + (value.length > 50 ? value.substring(0, 50) + '...' : value));
+            }
+        }
+
+        // Auto-run on load
+        window.onload = function() {
+            log('Debug tool loaded');
+            showStorage();
+        };
+    </script>
+</body>
+</html>

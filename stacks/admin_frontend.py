@@ -34,7 +34,7 @@ class AdminFrontendStack(Stack):
         self.admin_distribution = cloudfront.Distribution(
             self, "AdminDistribution",
             default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3Origin(self.admin_bucket),
+                origin=origins.S3BucketOrigin(self.admin_bucket),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 cache_policy=cloudfront.CachePolicy.CACHING_DISABLED
             ),
